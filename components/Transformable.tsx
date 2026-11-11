@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, type CSSProperties, type PointerEvent as RPointerEvent, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent, type ReactNode } from 'react';
 import type { Placeable } from '@/lib/types';
 
 type Patch = Partial<Pick<Placeable, 'x' | 'y' | 'size' | 'rot'>>;
@@ -17,6 +17,8 @@ interface Props<T extends Placeable> {
   allowOverflow?: boolean;
   minSize?: number;
   maxSize?: number;
+  /** When set, the selected item gets a small × button that removes it. */
+  onRemove?: (id: string) => void;
 }
 
 type Gesture =
@@ -139,6 +141,34 @@ export default function Transformable<T extends Placeable>(p: Props<T>) {
     else if (gesture.current?.mode === 'pinch' && pointers.current.size < 2) gesture.current = null;
   }
 
+  // Place the × and resize dot at the selected item's corners, kept inside the visible area.
+  const itemEls = useRef(new Map<string, HTMLDivElement>());
+  const [ctl, setCtl] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const selectedItem = p.editable && p.selectedId ? find(p.selectedId) : undefined;
+
+  useLayoutEffect(() => {
+    const el = selectedItem ? itemEls.current.get(selectedItem.id) : undefined;
+    const box = ref.current;
+    if (!el || !box) {
+      if (ctl) setCtl(null);
+      return;
+    }
+    const b = box.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    const m = 12; // keep controls at least this far inside the edges
+    const cx = (v: number) => Math.min(b.width - m, Math.max(m, v));
+    const cy = (v: number) => Math.min(b.height - m, Math.max(m, v));
+    const next = {
+      x1: cx(r.right - b.left + 10), // × : top-right
+      y1: cy(r.top - b.top - 10),
+      x2: cx(r.right - b.left + 10), // resize dot : bottom-right
+      y2: cy(r.bottom - b.top + 10),
+    };
+    if (!ctl || Object.keys(next).some((k) => Math.abs(next[k as keyof typeof next] - ctl[k as keyof typeof ctl]) > 0.5)) {
+      setCtl(next);
+    }
+  });
+
   return (
     <div
       ref={ref}
@@ -154,6 +184,10 @@ export default function Transformable<T extends Placeable>(p: Props<T>) {
         return (
           <div
             key={item.id}
+            ref={(el) => {
+              if (el) itemEls.current.set(item.id, el);
+              else itemEls.current.delete(item.id);
+            }}
             className={`tf-item${p.editable ? ' editable' : ''}${selected ? ' selected' : ''}`}
             style={{
               left: `${item.x * 100}%`,
@@ -165,16 +199,34 @@ export default function Transformable<T extends Placeable>(p: Props<T>) {
             onPointerDown={(e) => onItemDown(e, item, 'move')}
           >
             {p.renderItem(item)}
-            {selected && (
-              <span
-                className="tf-handle"
-                aria-label="Resize and rotate"
-                onPointerDown={(e) => onItemDown(e, item, 'handle')}
-              />
-            )}
           </div>
         );
       })}
+      {selectedItem && ctl && (
+        <>
+          {p.onRemove && (
+            <button
+              type="button"
+              className="tf-remove"
+              aria-label="Remove"
+              style={{ left: ctl.x1, top: ctl.y1 }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                p.onRemove!(selectedItem.id);
+              }}
+            >
+              ×
+            </button>
+          )}
+          <span
+            className="tf-handle"
+            aria-label="Resize and rotate"
+            style={{ left: ctl.x2, top: ctl.y2 }}
+            onPointerDown={(e) => onItemDown(e, selectedItem, 'handle')}
+          />
+        </>
+      )}
     </div>
   );
 }

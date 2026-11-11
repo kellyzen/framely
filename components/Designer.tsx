@@ -77,6 +77,7 @@ export default function Designer({
   const [textDraft, setTextDraft] = useState('');
   const [emojiCat, setEmojiCat] = useState('Bride');
   const [camPreview, setCamPreview] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const update = useCallback((fn: (d: BoothConfig) => void) => {
     setCfg((c) => {
@@ -381,6 +382,38 @@ export default function Designer({
     if (shot >= cfg.shots) setShot(0);
   }, [cfg.shots, shot]);
 
+  // full-screen editing only makes sense on the placement / sticker steps
+  useEffect(() => {
+    if (!showStage && tab !== 'decorate') setExpanded(false);
+  }, [showStage, tab]);
+
+  useEffect(() => {
+    if (!expanded) return;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [expanded]);
+
+  /** the item the quick toolbar acts on (cutout on the photos step, sticker on the stickers step) */
+  const editingItem = showStage ? selectedLayer : tab === 'decorate' ? selectedSticker : null;
+
+  function nudge(by: { size?: number; rot?: number }) {
+    if (!editingItem) return;
+    const patch = {
+      ...(by.size ? { size: Math.min(showStage ? 2.5 : 1.2, Math.max(0.02, editingItem.size * by.size)) } : {}),
+      ...(by.rot ? { rot: editingItem.rot + by.rot } : {}),
+    };
+    if (showStage) patchLayer(editingItem.id, patch);
+    else patchSticker(editingItem.id, patch);
+  }
+
+  function removeSelected() {
+    if (!editingItem) return;
+    if (showStage) removeLayer(editingItem.id);
+    else removeSticker(editingItem.id);
+  }
+
   if (!loaded) {
     return <div className="booth-msg" style={{ color: 'var(--muted)' }}>Loading…</div>;
   }
@@ -408,7 +441,13 @@ export default function Designer({
       </header>
 
       <div className="designer">
-        <section className="preview-pane" aria-label="Preview">
+        <section className={`preview-pane${expanded ? ' expanded' : ''}`} aria-label="Preview">
+          {expanded && (
+            <div className="expanded-top">
+              <strong>{showStage ? `Place star photos · Shot ${shot + 1}` : tab === 'decorate' ? 'Arrange stickers' : 'Preview'}</strong>
+              <button className="btn btn-sm btn-dark" onClick={() => setExpanded(false)}>Done</button>
+            </div>
+          )}
           {showStage && (
             <div className="row" style={{ justifyContent: 'center' }}>
               <Segmented
@@ -435,6 +474,7 @@ export default function Designer({
                     selectedId={selLayer}
                     onSelect={setSelLayer}
                     onChange={patchLayer}
+                    onRemove={removeLayer}
                     background={
                       camPreview && !cam.error ? (
                         <video ref={cam.videoRef} className="mirror" playsInline muted autoPlay />
@@ -454,16 +494,35 @@ export default function Designer({
                 selectedId={selSticker}
                 onSelect={setSelSticker}
                 onChange={patchSticker}
+                onRemove={tab === 'decorate' ? removeSticker : undefined}
               />
             )}
           </div>
-          <p className="preview-caption">
-            {showStage
-              ? 'Drag to move · corner handle or pinch to resize & rotate'
-              : tab === 'decorate'
-                ? 'Drag stickers · corner handle or pinch to resize & rotate'
-                : 'Live preview of your frame'}
-          </p>
+          {expanded && editingItem ? (
+            <div className="quick-tools" role="toolbar" aria-label="Adjust selected item">
+              <button className="btn btn-icon" onClick={() => nudge({ size: 1 / 1.12 })} aria-label="Smaller">－</button>
+              <button className="btn btn-icon" onClick={() => nudge({ size: 1.12 })} aria-label="Bigger">＋</button>
+              <button className="btn btn-icon" onClick={() => nudge({ rot: -15 })} aria-label="Rotate left">⟲</button>
+              <button className="btn btn-icon" onClick={() => nudge({ rot: 15 })} aria-label="Rotate right">⟳</button>
+              {showStage && selectedLayer && (
+                <button className="btn btn-icon" onClick={() => patchLayer(selectedLayer.id, { flip: !selectedLayer.flip })} aria-label="Flip">↔</button>
+              )}
+              <button className="btn btn-icon btn-danger" onClick={removeSelected} aria-label="Delete">🗑</button>
+            </div>
+          ) : (
+            <div className="preview-caption-row">
+              <p className="preview-caption">
+                {showStage
+                  ? 'Tap a photo, then drag. Pinch or use the corner dot to resize.'
+                  : tab === 'decorate'
+                    ? 'Tap a sticker, then drag. Pinch or use the corner dot to resize.'
+                    : 'Live preview of your frame'}
+              </p>
+              {!expanded && (showStage || tab === 'decorate') && (
+                <button className="btn btn-sm expand-btn" onClick={() => setExpanded(true)}>⤢ Expand</button>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="controls-pane">
@@ -473,12 +532,21 @@ export default function Designer({
                 ['layout', '1 · Layout'],
                 ['photos', '2 · Star photos'],
                 ['frame', '3 · Frame'],
-                ['decorate', '4 · Stickers'],
-                ['text', '5 · Text'],
+                ['text', '4 · Text'],
+                ['decorate', '5 · Stickers'],
                 ['booth', '6 · Booth'],
               ] as [Tab, string][]
             ).map(([id, label]) => (
-              <button key={id} role="tab" className="tab" aria-selected={tab === id} onClick={() => setTab(id)}>
+              <button
+                key={id}
+                role="tab"
+                className="tab"
+                aria-selected={tab === id}
+                onClick={(e) => {
+                  setTab(id);
+                  e.currentTarget.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+                }}
+              >
                 {label}
               </button>
             ))}
@@ -600,11 +668,14 @@ export default function Designer({
                     <span className="label">In this shot</span>
                     <div className="layer-list" style={{ marginBottom: 12 }}>
                       {shotLayers.length === 0 && <span className="hint">No star photo in this shot.</span>}
-                      {shotLayers.map((l) => (
-                        <button key={l.id} className="layer-chip" aria-pressed={l.id === selLayer} onClick={() => setSelLayer(l.id)}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={assetUrls[l.assetId]} alt="" />
-                        </button>
+                      {shotLayers.map((l, i) => (
+                        <span key={l.id} className="chip-wrap">
+                          <button className="layer-chip" aria-pressed={l.id === selLayer} onClick={() => setSelLayer(l.id)} aria-label={`Select photo ${i + 1}`}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={assetUrls[l.assetId]} alt="" />
+                          </button>
+                          <button className="chip-x" aria-label={`Remove photo ${i + 1} from this shot`} onClick={() => removeLayer(l.id)}>×</button>
+                        </span>
                       ))}
                     </div>
                     <span className="label">Add to this shot</span>
@@ -782,6 +853,32 @@ export default function Designer({
 
           {tab === 'decorate' && (
             <>
+              {cfg.stickers.length > 0 && (
+                <Field label={`On your frame (${cfg.stickers.length})`} hint="Tap one to select it, or × to remove it.">
+                  <div className="layer-list">
+                    {cfg.stickers.map((s, i) => (
+                      <span key={s.id} className="chip-wrap">
+                        <button
+                          className={`sticker-chip${s.kind === 'text' ? ' text' : ''}`}
+                          aria-pressed={s.id === selSticker}
+                          aria-label={`Select sticker ${i + 1}`}
+                          onClick={() => setSelSticker(s.id)}
+                        >
+                          {s.kind === 'image' ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={assetUrls[s.value]} alt="" />
+                          ) : s.kind === 'text' ? (
+                            s.value.slice(0, 14)
+                          ) : (
+                            s.value
+                          )}
+                        </button>
+                        <button className="chip-x" aria-label={`Remove sticker ${i + 1}`} onClick={() => removeSticker(s.id)}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                </Field>
+              )}
               {selectedSticker && (
                 <div className="card" style={{ marginBottom: 16 }}>
                   <p className="section-title">Selected sticker</p>

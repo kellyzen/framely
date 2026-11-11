@@ -551,6 +551,7 @@ img {
 .tf-item.selected {
   outline: 2px dashed var(--brand);
   outline-offset: 2px;
+  z-index: 5;
 }
 .tf-item img {
   display: block;
@@ -559,18 +560,91 @@ img {
   pointer-events: none;
   -webkit-user-drag: none;
 }
-.tf-handle {
+/* Resize dot and × sit just outside the item's corners, so they never cover it */
+.tf-handle,
+.tf-remove {
   position: absolute;
-  right: -14px;
-  bottom: -14px;
-  width: 28px;
-  height: 28px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  background: var(--brand);
-  border: 3px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  cursor: nwse-resize;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   touch-action: none;
+  padding: 0;
+  z-index: 2;
+}
+.tf-handle,
+.tf-remove {
+  transform: translate(-50%, -50%);
+}
+.tf-handle {
+  background: var(--brand);
+  cursor: nwse-resize;
+}
+.tf-remove {
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-family: system-ui, sans-serif;
+}
+/* invisible padding makes them easier to tap without looking bigger */
+.tf-handle::after,
+.tf-remove::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+}
+@media (pointer: fine) {
+  .tf-handle,
+  .tf-remove {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* Full-screen editing (mostly for phones, where the strip preview is small) */
+.preview-caption-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.preview-caption-row .preview-caption {
+  margin: 0;
+}
+.preview-pane.expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  height: 100dvh;
+  padding: calc(10px + env(safe-area-inset-top)) 16px calc(12px + env(safe-area-inset-bottom));
+  border: none;
+}
+.preview-pane.expanded .preview-box {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  padding: 22px;
+}
+.expanded-top {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.quick-tools {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .sticker-text {
   white-space: nowrap;
@@ -687,6 +761,57 @@ img {
 }
 .layer-chip[aria-pressed='true'] {
   border-color: var(--brand);
+}
+.chip-wrap {
+  position: relative;
+}
+.chip-x {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  font-family: system-ui, sans-serif;
+}
+.sticker-chip {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  cursor: pointer;
+  font-size: 28px;
+  padding: 2px;
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+}
+.sticker-chip[aria-pressed='true'] {
+  border-color: var(--brand);
+}
+.sticker-chip.text {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  word-break: break-word;
+}
+.sticker-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .layer-chip img {
   width: 100%;

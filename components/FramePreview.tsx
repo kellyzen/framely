@@ -16,10 +16,11 @@ interface Props {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onChange: (id: string, patch: Partial<Sticker>) => void;
+  onRemove?: (id: string) => void;
 }
 
 /** Live preview of the whole frame. Stickers sit on top as draggable elements. */
-export default function FramePreview({ cfg, images, assetUrls, editable, selectedId, onSelect, onChange }: Props) {
+export default function FramePreview({ cfg, images, assetUrls, editable, selectedId, onSelect, onChange, onRemove }: Props) {
   const full = useMemo(() => computeLayout(cfg, 1), [cfg]);
   const fit = useFit(full.W / full.H);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -67,6 +68,7 @@ export default function FramePreview({ cfg, images, assetUrls, editable, selecte
             allowOverflow
             onSelect={onSelect}
             onChange={onChange}
+            onRemove={onRemove}
             minSize={0.02}
             maxSize={1.2}
             itemStyle={(s) =>

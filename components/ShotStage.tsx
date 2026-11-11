@@ -21,6 +21,7 @@ interface Props {
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
   onChange?: (id: string, patch: Partial<Layer>) => void;
+  onRemove?: (id: string) => void;
   children?: ReactNode;
   /** CSS size constraints for the box */
   style?: React.CSSProperties;
@@ -39,6 +40,7 @@ export default function ShotStage(p: Props) {
           editable={!!p.editable}
           onSelect={p.onSelect ?? (() => {})}
           onChange={(id, patch) => p.onChange?.(id, patch)}
+          onRemove={p.onRemove}
           minSize={0.08}
           maxSize={2.5}
           itemStyle={(l) => {
